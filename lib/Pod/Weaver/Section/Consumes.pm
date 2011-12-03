@@ -65,9 +65,6 @@ sub _get_roles {
 
     my @roles = $module->meta->calculate_all_roles;
 
-    use Data::Dumper;
-    print Dumper \@roles;
-
     return @roles;
 }
 
