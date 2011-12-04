@@ -38,12 +38,16 @@ sub weave_section {
             content   => 4
         } ),
 
-        map { 
+        ( map { 
             Command->new( {
                 command    => 'item',
                 content    => sprintf 'L<%s>', $_->name
             } ),
-        } @roles
+        } @roles ),
+        Command->new( { 
+            command   => 'back',
+            content   => ''
+        } )
     );        
 
     push @{ $doc->children },
