@@ -30,8 +30,7 @@ sub weave_section {
 
     return unless $module->can( 'meta' );
 
-    my @roles = $self->_get_roles( $module );
-
+    my @roles = grep { $_->name ne $module } $self->_get_roles( $module );
     return unless @roles;
 
     my @pod = (
@@ -46,6 +45,7 @@ sub weave_section {
                 content    => sprintf '* L<%s>', $_->name
             } ),
         } @roles ),
+
         Command->new( { 
             command   => 'back',
             content   => ''
