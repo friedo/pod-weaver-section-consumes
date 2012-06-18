@@ -30,7 +30,11 @@ sub weave_section {
 
     return unless $module->can( 'meta' );
 
-    my @roles = grep { $_->name ne $module } $self->_get_roles( $module );
+    my @roles = sort
+        grep { $_ ne $module }
+        map  { $_->name      }
+        $self->_get_roles( $module );
+
     return unless @roles;
 
     my @pod = (
@@ -42,7 +46,7 @@ sub weave_section {
         ( map { 
             Command->new( {
                 command    => 'item',
-                content    => sprintf '* L<%s>', $_->name
+                content    => "* L<$_>",
             } ),
         } @roles ),
 
