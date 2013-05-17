@@ -1,11 +1,12 @@
 package Pod::Weaver::Section::Consumes;
 
+# ABSTRACT: Add a list of roles to your POD.
+
 use strict;
 use warnings;
-use Module::Load;
-use lib './lib';    #instead messing with INC
 
-# ABSTRACT: Add a list of roles to your POD.
+use Class::Inspector;
+use Module::Load;
 use Moose;
 with 'Pod::Weaver::Role::Section';
 
@@ -15,24 +16,28 @@ use aliased 'Pod::Elemental::Element::Pod5::Command';
 sub weave_section {
     my ( $self, $doc, $input ) = @_;
 
-    my $filename = $input->{filename};    #full rel path
-    return unless $filename =~ m{^lib/};
+    my $filename = $input->{filename};
 
-    # works only if one package pro file
-    my $inc_filename = $filename;         #as in %INC's keys
-    $inc_filename =~ s{^lib/}{};          # assume modules live under lib
-    my $module = $inc_filename;
+    #consumes section is written only for lib/*.pm and for one package pro file
+    #see Pod::Weaver::Section::ClassMopper for an alternative
+    return if $filename !~ m{^lib};
+    return if $filename !~ m{\.pm$};
+
+    my $module = $filename;
+    $module =~ s{^lib/}{};
     $module =~ s{/}{::}g;
-    $module =~ s{\.\w+$}{};
+    $module =~ s{\.pm$}{};
 
-    eval { load $inc_filename };
-    print "$@" if $@;
-    #print map {"$_\n"} sort keys %INC;
+    #print "module:$module\n";
+    if ( !Class::Inspector->loaded($module) ) {
+        eval { local @INC = ( 'lib', @INC ); Module::Load::load $module };
+        print "$@" if $@;    #warn
+    }
 
     return unless $module->can('meta');
     my @roles = sort
-      grep { $_ ne $module }
-      map  { $_->name } $self->_get_roles($module);
+      grep { $_ ne $module } $self->_get_roles($module);
+
     return unless @roles;
 
     my @pod = (
@@ -76,12 +81,15 @@ sub weave_section {
 
 sub _get_roles {
     my ( $self, $module ) = @_;
-
-    my @roles = eval { $module->meta->calculate_all_roles };
+    my @roles = map { $_->name } eval { $module->meta->calculate_all_roles };
     print "Possibly harmless: $@" if $@;
+
+    #print "@roles\n";
     return @roles;
 }
 
+__PACKAGE__->meta->make_immutable;
+no Moose;
 1;
 
 =pod
@@ -95,12 +103,38 @@ In your C<weaver.ini>:
 =head1 DESCRIPTION
 
 This L<Pod::Weaver> section plugin creates a "CONSUMES" section in your POD
-which will contain a list of all the roles consumed by your class. It accomplishes
-this by attempting to compile your class and interrogating its metaclass object.
+which contains a list of the roles consumed by your class. It accomplishes this 
+by loading all classes and interrogating their metaclass.
 
-Classes which do not have a C<meta> method will be skipped.
+All classes (*.pm files) in your distribution's lib directory will be loaded.
+Classes which do not have a C<meta> method will be skipped. POD is changed only
+for files which actually consume roles. 
 
+=head1 CAVEAT
 
+In case you use L<Dist::Zilla> to install dependencies of your distribution,
+you might encounter a quirk caused by this plugin. If you run C<dzil listdeps>, 
+dzil will load this module which in turn will load all classes in lib which in 
+turn may want to load classes which are not yet installed. Currently, there 
+seems to be no easy way around this with L<Dist::Zilla> alone. But there are 
+workarounds. You could, for example, eliminate weaver.ini during the 
+installation process:
 
- 
+    #temporarily remove weaver.ini during install
+    cpanm Pod::Weaver::Section::Consumes
+    mv weaver.ini _weaver.ini
+    dzil authordeps | cpanm
+    dzil listdeps | cpanm
+    mv _weaver.ini weaver.ini
 
+Or install dependencies before you run listdeps, for example by adding them
+as authordeps to dist.ini.
+
+    #dist.ini 
+    #authordep JSON = 2.57
+
+=head1 SEE ALSO
+
+L<Pod::Weaver::Section::Extends> 
+
+=cut
